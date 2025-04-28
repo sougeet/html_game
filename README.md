@@ -1,2 +1,4 @@
 # html_game
-html game waiting for upate
+html game
+
+# see html
