@@ -1,0 +1,302 @@
+
+
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>水印生成器</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 10px;
+      font-size: 16px;
+    }
+
+    .container {
+      width: 90vw;
+      margin: 0 auto;
+    }
+
+    .preview {
+      margin-top: 20px;
+    }
+
+    /*
+      将 Canvas 隐藏，仅用于后台绘制。用户看不到它，
+      页面上就不会出现两张相同的图片。
+    */
+    #imageCanvas {
+      display: none; 
+    }
+
+    /*
+      用于长按保存的 <img>，在预览生成之后将数据写入这里
+    */
+    #previewImg {
+      display: none; 
+      max-width: 100%;
+      margin-top: 10px;
+      border: 1px solid #ccc;
+    }
+
+    input[type="file"],
+    input[type="text"],
+    button {
+      padding: 10px;
+      margin: 10px 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+
+    .controls {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+    }
+
+    .control-item {
+      margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .control-item span {
+      margin-top: 5px;
+      font-weight: bold;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        font-size: 14px;
+      }
+      .container {
+        width: 95vw;
+      }
+    }
+  </style>
+ 
+
+</head>
+<body>
+  <div class="container">
+    <h1>水印生成器</h1>
+
+    <!-- 图片上传与水印文字输入 -->
+    <div>
+      <label for="imageFile">选择图片：</label>
+      <input type="file" id="imageFile" accept="image/*" />
+    </div>
+    <div>
+      <label for="watermarkText">水印文字：</label>
+      <input type="text" id="watermarkText" placeholder="在这里输入水印文字" />
+    </div>
+
+    <!-- 参数设置区域 -->
+    <div class="controls">
+      <h3>水印参数设置</h3>
+
+      <div class="control-item">
+        <label for="fontSize">字体大小 (px):</label>
+        <input type="range" id="fontSize" min="10" max="100" value="60" />
+        <span id="fontSizeVal">60</span>
+      </div>
+
+      <div class="control-item">
+        <label for="watermarkColor">文字颜色:</label>
+        <input type="color" id="watermarkColor" value="#FF0000" />
+      </div>
+
+      <div class="control-item">
+        <label for="opacity">透明度 (0~100):</label>
+        <input type="range" id="opacity" min="0" max="100" value="30" />
+        <span id="opacityVal">30</span>
+      </div>
+
+      <div class="control-item">
+        <label for="stepX">水平间距:</label>
+        <input type="range" id="stepX" min="200" max="700" value="500" />
+        <span id="stepXVal">500</span>
+      </div>
+
+      <div class="control-item">
+        <label for="stepY">垂直间距:</label>
+        <input type="range" id="stepY" min="10" max="300" value="240" />
+        <span id="stepYVal">240</span>
+      </div>
+
+      <div class="control-item">
+        <label for="angle">水印角度 (0~360):</label>
+        <input type="range" id="angle" min="0" max="360" value="330" />
+        <span id="angleVal">330</span>
+      </div>
+    </div>
+
+    <!-- 按钮操作区 -->
+    <div>
+      <button id="previewBtn">预览</button>
+      <button id="downloadBtn" disabled>下载水印图片</button>
+    </div>
+
+    <!-- 预览区域 -->
+    <div class="preview">
+      <!-- 隐藏的 Canvas，用于后台绘制 -->
+      <canvas id="imageCanvas"></canvas>
+
+      <!-- 用于长按保存的最终预览图 -->
+      <img id="previewImg" alt="水印预览图" />
+    </div>
+  </div>
+
+  <script>
+    const imageFileInput = document.getElementById('imageFile');
+    const watermarkTextInput = document.getElementById('watermarkText');
+    const previewBtn = document.getElementById('previewBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const imageCanvas = document.getElementById('imageCanvas');
+    const previewImg = document.getElementById('previewImg');
+    const ctx = imageCanvas.getContext('2d');
+
+    // 参数控件
+    const fontSizeRange = document.getElementById('fontSize');
+    const fontSizeVal = document.getElementById('fontSizeVal');
+    const watermarkColorPicker = document.getElementById('watermarkColor');
+    const opacityRange = document.getElementById('opacity');
+    const opacityVal = document.getElementById('opacityVal');
+    const stepXRange = document.getElementById('stepX');
+    const stepXVal = document.getElementById('stepXVal');
+    const stepYRange = document.getElementById('stepY');
+    const stepYVal = document.getElementById('stepYVal');
+    const angleRange = document.getElementById('angle');
+    const angleVal = document.getElementById('angleVal');
+
+    let uploadedImage = null;
+
+    // 监听文件选择事件
+    imageFileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            uploadedImage = img;
+            imageCanvas.width = img.width;
+            imageCanvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            // 同步到 <img>，如果想先显示原图
+            updatePreviewImg();
+          }
+          img.src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 监听“预览”按钮
+    previewBtn.addEventListener('click', () => {
+      if (!uploadedImage) {
+        alert('请先选择图片');
+        return;
+      }
+
+      // 获取当前参数
+      const text = watermarkTextInput.value.trim();
+      const fontSize = parseInt(fontSizeRange.value, 10);
+      const color = watermarkColorPicker.value;
+      const opacity = parseInt(opacityRange.value, 10) / 100; // 0 ~ 1
+      const stepX = parseInt(stepXRange.value, 10);
+      const stepY = parseInt(stepYRange.value, 10);
+      const angle = parseInt(angleRange.value, 10);
+      const angleInRadians = angle * Math.PI / 180;
+
+      // 重置并绘制原图
+      imageCanvas.width = uploadedImage.width;
+      imageCanvas.height = uploadedImage.height;
+      ctx.drawImage(uploadedImage, 0, 0);
+
+      // 如果有文字则平铺水印
+      if (text) {
+        ctx.font = `${fontSize}px Arial`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = hexToRgba(color, opacity);
+
+        // 计算对角线长度，保证旋转后覆盖整个图片
+        const diagonal = Math.sqrt(
+          imageCanvas.width ** 2 + imageCanvas.height ** 2
+        );
+
+        ctx.save();
+        ctx.translate(imageCanvas.width / 2, imageCanvas.height / 2);
+        ctx.rotate(angleInRadians);
+
+        for (let y = -diagonal / 2; y < diagonal / 2; y += stepY) {
+          for (let x = -diagonal / 2; x < diagonal / 2; x += stepX) {
+            ctx.fillText(text, x, y);
+          }
+        }
+        ctx.restore();
+      }
+
+      downloadBtn.disabled = false;
+      // 将 Canvas 中的图像更新到 <img>，便于长按保存
+      updatePreviewImg();
+    });
+
+    // 监听“下载水印图片”按钮
+    downloadBtn.addEventListener('click', () => {
+      if (!uploadedImage) {
+        alert('请先选择图片并预览');
+        return;
+      }
+      const link = document.createElement('a');
+      link.download = 'watermarked_image.png';
+      link.href = imageCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    // 滑块监听
+    fontSizeRange.addEventListener('input', () => {
+      fontSizeVal.textContent = fontSizeRange.value;
+    });
+    opacityRange.addEventListener('input', () => {
+      opacityVal.textContent = opacityRange.value;
+    });
+    stepXRange.addEventListener('input', () => {
+      stepXVal.textContent = stepXRange.value;
+    });
+    stepYRange.addEventListener('input', () => {
+      stepYVal.textContent = stepYRange.value;
+    });
+    angleRange.addEventListener('input', () => {
+      angleVal.textContent = angleRange.value;
+    });
+
+    // 将 #RRGGBB 转成 rgba(...)
+    function hexToRgba(hex, alpha) {
+      hex = hex.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    // 将 Canvas 的图像同步到 <img> 标签，供长按保存
+    function updatePreviewImg() {
+      const dataURL = imageCanvas.toDataURL('image/png');
+      previewImg.src = dataURL;
+      previewImg.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
